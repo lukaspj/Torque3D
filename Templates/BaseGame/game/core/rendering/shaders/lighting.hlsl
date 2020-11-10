@@ -39,13 +39,16 @@ uniform float4 inLightColor[4];
 #endif
 
 uniform float4 ambient;
-uniform float smoothness;
+uniform float roughness;
 uniform float metalness;
 uniform float4 albedo;
 
 #endif // !TORQUE_SHADERGEN
 
-#define MAX_PROBES 50
+#ifndef MAX_PROBES
+#define MAX_PROBES 8
+#endif
+
 #define MAX_FORWARD_PROBES 4
 
 #define MAX_FORWARD_LIGHT 4
@@ -74,8 +77,9 @@ struct Surface
 	float3 V;				// world space view vector
 	float4 baseColor;		// base color [0 -> 1] (rgba)
 	float metalness;		// metalness [0:dielectric -> 1:metal]
-	float roughness;		// roughness: [0:smooth -> 1:rough] (linear)
-	float roughness_brdf; // roughness remapped from linear to BRDF
+	float roughness;		// material roughness: [0:smooth -> 1:rough] 
+	float linearRoughness; // linear roughness (roughness^2)
+   float linearRoughnessSq; // (linearRoughness^2)
    float depth;         // depth: [0:near -> 1:far] (linear)
    float ao;            // ambient occlusion [0 -> 1]
    float matFlag;       // material flag - use getFlag to retreive 
@@ -90,17 +94,18 @@ struct Surface
 	inline void Update()
 	{
 		NdotV = abs(dot(N, V)) + 1e-5f; // avoid artifact
+   
+      linearRoughness = roughness * roughness;
+      linearRoughnessSq = linearRoughness * linearRoughness;
 
-		albedo = baseColor.rgb * (1.0 - metalness);
-		f0 = lerp(0.04.xxx, baseColor.rgb, metalness);
+		albedo = baseColor.rgb * (1.0f - metalness);
+		f0 = lerp(0.04f, baseColor.rgb, metalness);
 
 		R = -reflect(V, N);
-		f90 = saturate(50.0 * dot(f0, 0.33));
+		f90 = saturate(50.0f * dot(f0, 0.33f));
 		F = F_Schlick(f0, f90, NdotV);
 	}
 };
-
-
 
 inline Surface createSurface(float4 gbuffer0, TORQUE_SAMPLER2D(gbufferTex1), TORQUE_SAMPLER2D(gbufferTex2), in float2 uv, in float3 wsEyePos, in float3 wsEyeRay, in float4x4 invView)
 {
@@ -114,8 +119,7 @@ inline Surface createSurface(float4 gbuffer0, TORQUE_SAMPLER2D(gbufferTex1), TOR
 	surface.N = mul(invView, float4(gbuffer0.xyz,0)).xyz;
 	surface.V = normalize(wsEyePos - surface.P);
 	surface.baseColor = gbuffer1;
-	surface.roughness = 1.0 - (gbuffer2.b*0.8+0.1999); //t3d uses smoothness, so we convert to roughness.
-	surface.roughness_brdf = surface.roughness * surface.roughness;
+	surface.roughness = clamp(gbuffer2.b, 0.01f, 1.0f);
 	surface.metalness = gbuffer2.a;
    surface.ao = gbuffer2.g;
    surface.matFlag = gbuffer2.r;
@@ -133,8 +137,7 @@ inline Surface createForwardSurface(float4 baseColor, float3 normal, float4 pbrP
    surface.N = normal;
    surface.V = normalize(wsEyePos - surface.P);
    surface.baseColor = baseColor;
-   surface.roughness = 1.0 - (pbrProperties.b*0.8+0.1999); //t3d uses smoothness, so we convert to roughness.
-   surface.roughness_brdf = surface.roughness * surface.roughness;
+   surface.roughness = clamp(pbrProperties.b, 0.01f, 1.0f);
    surface.metalness = pbrProperties.a;
    surface.ao = pbrProperties.g;
    surface.matFlag = pbrProperties.r;
@@ -146,7 +149,7 @@ inline Surface createForwardSurface(float4 baseColor, float3 normal, float4 pbrP
 struct SurfaceToLight
 {
 	float3 L;				// surface to light vector
-    float3 Lu;				// un-normalized surface to light vector
+   float3 Lu;				// un-normalized surface to light vector
 	float3 H;				// half-vector between view vector and light vector
 	float NdotL;			// cos(angle between N and L)
 	float HdotV;			// cos(angle between H and V) = HdotL = cos(angle between H and L)
@@ -170,16 +173,15 @@ float3 BRDF_GetDebugSpecular(in Surface surface, in SurfaceToLight surfaceToLigh
 {
    //GGX specular
    float3 F = F_Schlick(surface.f0, surface.f90, surfaceToLight.HdotV);
-    float Vis = V_SmithGGXCorrelated(surface.NdotV, surfaceToLight.NdotL, surface.roughness);
-    float D = D_GGX(surfaceToLight.NdotH, surface.roughness);
-   float3 Fr = D * F * Vis;
-   return Fr*M_1OVER_PI_F;
+   float Vis = V_SmithGGXCorrelated(surface.NdotV, surfaceToLight.NdotL, surface.linearRoughnessSq);
+   float D = D_GGX(surfaceToLight.NdotH, surface.linearRoughnessSq);
+   float3 Fr = D * F * Vis * M_1OVER_PI_F;
+   return Fr;
 }
 
 float3 BRDF_GetDebugDiffuse(in Surface surface, in SurfaceToLight surfaceToLight)
 {
-   float3 Fd = surface.albedo.rgb;
-	return Fd*M_1OVER_PI_F;
+   return surface.albedo.rgb * M_1OVER_PI_F;
 }
 
 //attenuations functions from "moving frostbite to pbr paper"
@@ -210,15 +212,20 @@ float getDistanceAtt( float3 unormalizedLightVector , float invSqrAttRadius )
 float3 evaluateStandardBRDF(Surface surface, SurfaceToLight surfaceToLight)
 {
    //lambert diffuse
-   float3 Fd = surface.albedo.rgb;
+   float3 Fd = surface.albedo.rgb * M_1OVER_PI_F;
     
    //GGX specular
    float3 F = F_Schlick(surface.f0, surface.f90, surfaceToLight.HdotV);
-    float Vis = V_SmithGGXCorrelated(surface.NdotV, surfaceToLight.NdotL, surface.roughness);
-    float D = D_GGX(surfaceToLight.NdotH, surface.roughness);
+   float Vis = V_SmithGGXCorrelated(surface.NdotV, surfaceToLight.NdotL, surface.linearRoughnessSq);
+   float D = D_GGX(surfaceToLight.NdotH, surface.linearRoughnessSq);
    float3 Fr = D * F * Vis;
+   
+#if CAPTURING == true
+    return lerp(Fd + Fr,surface.f0,surface.metalness);
+#else
+   return Fd + Fr;
+#endif
 
-   return (Fd + Fr) * M_1OVER_PI_F;
 }
 
 float3 getDirectionalLight(Surface surface, SurfaceToLight surfaceToLight, float3 lightColor, float lightIntensity, float shadow)
@@ -234,10 +241,14 @@ float3 getPunctualLight(Surface surface, SurfaceToLight surfaceToLight, float3 l
    return evaluateStandardBRDF(surface,surfaceToLight) * factor;
 }
 
-
 float computeSpecOcclusion( float NdotV , float AO , float roughness )
 {
    return saturate (pow( abs(NdotV + AO) , exp2 ( -16.0f * roughness - 1.0f )) - 1.0f + AO );
+}
+
+float roughnessToMipLevel(float roughness, float numMips)
+{	
+   return roughness * numMips;
 }
 
 float4 compute4Lights( Surface surface,
@@ -332,14 +343,14 @@ float defineBoxSpaceInfluence(float3 wsPosition, float4x4 worldToObj, float atte
 // Box Projected IBL Lighting
 // Based on: http://www.gamedev.net/topic/568829-box-projected-cubemap-environment-mapping/
 // and https://seblagarde.wordpress.com/2012/09/29/image-based-lighting-approaches-and-parallax-corrected-cubemap/
-float3 boxProject(float3 wsPosition, float3 wsReflectVec, float4x4 worldToObj, float3 refBoxMin, float3 refBoxMax, float3 refPosition)
+float3 boxProject(float3 wsPosition, float3 wsReflectVec, float4x4 worldToObj, float3 refScale, float3 refPosition)
 {
    float3 RayLS = mul(worldToObj, float4(wsReflectVec, 0.0)).xyz;
    float3 PositionLS = mul(worldToObj, float4(wsPosition, 1.0)).xyz;
 
-   float3 unit = refBoxMax.xyz - refBoxMin.xyz;
-   float3 plane1vec = (unit / 2 - PositionLS) / RayLS;
-   float3 plane2vec = (-unit / 2 - PositionLS) / RayLS;
+   float3 unit = refScale;
+   float3 plane1vec = (unit - PositionLS) / RayLS;
+   float3 plane2vec = (-unit - PositionLS) / RayLS;
    float3 furthestPlane = max(plane1vec, plane2vec);
    float dist = min(min(furthestPlane.x, furthestPlane.y), furthestPlane.z);
    float3 posonbox = wsPosition + wsReflectVec * dist;
@@ -349,7 +360,7 @@ float3 boxProject(float3 wsPosition, float3 wsReflectVec, float4x4 worldToObj, f
 
 float4 computeForwardProbes(Surface surface,
     float cubeMips, int numProbes, float4x4 worldToObjArray[MAX_FORWARD_PROBES], float4 probeConfigData[MAX_FORWARD_PROBES], 
-    float4 inProbePosArray[MAX_FORWARD_PROBES], float4 refBoxMinArray[MAX_FORWARD_PROBES], float4 refBoxMaxArray[MAX_FORWARD_PROBES], float4 inRefPosArray[MAX_FORWARD_PROBES],
+    float4 inProbePosArray[MAX_FORWARD_PROBES], float4 refScaleArray[MAX_FORWARD_PROBES], float4 inRefPosArray[MAX_FORWARD_PROBES],
     float skylightCubemapIdx, TORQUE_SAMPLER2D(BRDFTexture), 
 	 TORQUE_SAMPLERCUBEARRAY(irradianceCubemapAR), TORQUE_SAMPLERCUBEARRAY(specularCubemapAR))
 {
@@ -445,7 +456,7 @@ float4 computeForwardProbes(Surface surface,
    float3 specular = float3(0, 0, 0);
 
    // Radiance (Specular)
-   float lod = surface.roughness*cubeMips;
+   float lod = roughnessToMipLevel(surface.roughness, cubeMips);
 
    for (i = 0; i < numProbes; ++i)
    {
@@ -453,7 +464,7 @@ float4 computeForwardProbes(Surface surface,
       if (contrib > 0.0f)
       {
          int cubemapIdx = probeConfigData[i].a;
-         float3 dir = boxProject(surface.P, surface.R, worldToObjArray[i], refBoxMinArray[i].xyz, refBoxMaxArray[i].xyz, inRefPosArray[i].xyz);
+         float3 dir = boxProject(surface.P, surface.R, worldToObjArray[i], refScaleArray[i].xyz, inRefPosArray[i].xyz);
 
          irradiance += TORQUE_TEXCUBEARRAYLOD(irradianceCubemapAR, dir, cubemapIdx, 0).xyz * contrib;
          specular += TORQUE_TEXCUBEARRAYLOD(specularCubemapAR, dir, cubemapIdx, lod).xyz * contrib;
@@ -468,24 +479,30 @@ float4 computeForwardProbes(Surface surface,
    }
 
    //energy conservation
-   float3 kD = 1.0f - surface.F;
+   float3 F = FresnelSchlickRoughness(surface.NdotV, surface.f0, surface.roughness);
+   float3 kD = 1.0f - F;
    kD *= 1.0f - surface.metalness;
 
    float dfgNdotV = max( surface.NdotV , 0.0009765625f ); //0.5f/512.0f (512 is size of dfg/brdf lookup tex)
    float2 envBRDF = TORQUE_TEX2DLOD(BRDFTexture, float4(dfgNdotV, surface.roughness,0,0)).rg;
-   specular *= surface.F * envBRDF.x + surface.f90 * envBRDF.y;
+   specular *= F * envBRDF.x + surface.f90 * envBRDF.y;
    irradiance *= kD * surface.baseColor.rgb;
 
    //AO
    irradiance *= surface.ao;
    specular *= computeSpecOcclusion(surface.NdotV, surface.ao, surface.roughness);
 
-   return float4(irradiance + specular, 0);//alpha writes disabled
+   //http://marmosetco.tumblr.com/post/81245981087
+   float horizonOcclusion = 1.3;
+   float horizon = saturate( 1 + horizonOcclusion * dot(surface.R, surface.N));
+   horizon *= horizon;
+
+   return float4((irradiance + specular) * horizon, 0);//alpha writes disabled
 }
 
 float4 debugVizForwardProbes(Surface surface,
     float cubeMips, int numProbes, float4x4 worldToObjArray[MAX_FORWARD_PROBES], float4 probeConfigData[MAX_FORWARD_PROBES], 
-    float4 inProbePosArray[MAX_FORWARD_PROBES], float4 refBoxMinArray[MAX_FORWARD_PROBES], float4 refBoxMaxArray[MAX_FORWARD_PROBES], float4 inRefPosArray[MAX_FORWARD_PROBES],
+    float4 inProbePosArray[MAX_FORWARD_PROBES], float4 refScaleArray[MAX_FORWARD_PROBES], float4 inRefPosArray[MAX_FORWARD_PROBES],
     float skylightCubemapIdx, TORQUE_SAMPLER2D(BRDFTexture), 
 	 TORQUE_SAMPLERCUBEARRAY(irradianceCubemapAR), TORQUE_SAMPLERCUBEARRAY(specularCubemapAR), int showAtten, int showContrib, int showSpec, int showDiff)
 {
@@ -583,7 +600,7 @@ float4 debugVizForwardProbes(Surface surface,
    float3 specular = float3(0, 0, 0);
 
    // Radiance (Specular)
-   float lod = surface.roughness*cubeMips;
+   float lod = roughnessToMipLevel(surface.roughness, cubeMips);
 
    if(showSpec == 1)
    {
@@ -596,7 +613,7 @@ float4 debugVizForwardProbes(Surface surface,
       if (contrib > 0.0f)
       {
          int cubemapIdx = probeConfigData[i].a;
-         float3 dir = boxProject(surface.P, surface.R, worldToObjArray[i], refBoxMinArray[i].xyz, refBoxMaxArray[i].xyz, inRefPosArray[i].xyz);
+         float3 dir = boxProject(surface.P, surface.R, worldToObjArray[i], refScaleArray[i].xyz, inRefPosArray[i].xyz);
 
          irradiance += TORQUE_TEXCUBEARRAYLOD(irradianceCubemapAR, dir, cubemapIdx, 0).xyz * contrib;
          specular += TORQUE_TEXCUBEARRAYLOD(specularCubemapAR, dir, cubemapIdx, lod).xyz * contrib;
@@ -621,17 +638,23 @@ float4 debugVizForwardProbes(Surface surface,
    }
 
    //energy conservation
-   float3 kD = 1.0f - surface.F;
+   float3 F = FresnelSchlickRoughness(surface.NdotV, surface.f0, surface.roughness);
+   float3 kD = 1.0f - F;
    kD *= 1.0f - surface.metalness;
 
    float dfgNdotV = max( surface.NdotV , 0.0009765625f ); //0.5f/512.0f (512 is size of dfg/brdf lookup tex)
    float2 envBRDF = TORQUE_TEX2DLOD(BRDFTexture, float4(dfgNdotV, surface.roughness,0,0)).rg;
-   specular *= surface.F * envBRDF.x + surface.f90 * envBRDF.y;
+   specular *= F * envBRDF.x + surface.f90 * envBRDF.y;
    irradiance *= kD * surface.baseColor.rgb;
 
    //AO
    irradiance *= surface.ao;
    specular *= computeSpecOcclusion(surface.NdotV, surface.ao, surface.roughness);
 
-   return float4(irradiance + specular, 0);//alpha writes disabled
+   //http://marmosetco.tumblr.com/post/81245981087
+   float horizonOcclusion = 1.3;
+   float horizon = saturate( 1 + horizonOcclusion * dot(surface.R, surface.N));
+   horizon *= horizon;
+
+   return float4((irradiance + specular) * horizon, 0);//alpha writes disabled
 }

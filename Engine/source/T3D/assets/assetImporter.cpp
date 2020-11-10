@@ -61,7 +61,7 @@ AssetImportConfig::AssetImportConfig() :
    reverseWindingOrder(false),
    invertNormals(false),
    ImportMaterials(true),
-   CreatePBRConfig(true),
+   CreateORMConfig(true),
    UseDiffuseSuffixOnOriginImage(false),
    UseExistingMaterials(false),
    IgnoreMaterials(""),
@@ -160,11 +160,11 @@ void AssetImportConfig::initPersistFields()
 
    addGroup("Materials");
       addField("ImportMaterials", TypeBool, Offset(ImportMaterials, AssetImportConfig), "Does this config allow for importing of materials");
-      addField("CreatePBRConfig", TypeBool, Offset(PreventImportWithErrors, AssetImportConfig), "When importing a material, should it automatically attempt to merge Roughness, AO and Metalness maps into a single, composited PBR Configuration map");
+      addField("CreateORMConfig", TypeBool, Offset(PreventImportWithErrors, AssetImportConfig), "When importing a material, should it automatically attempt to merge Roughness, AO and Metalness maps into a single, composited PBR Configuration map");
       addField("UseDiffuseSuffixOnOriginImage", TypeBool, Offset(UseDiffuseSuffixOnOriginImage, AssetImportConfig), "When generating a material off of an importing image, should the importer force appending a diffusemap suffix onto the end to avoid potential naming confusion.\n e.g. MyCoolStuff.png is imported, generating MyCoolStuff material asset and MyCoolStuff_Diffuse image asset");
       addField("UseExistingMaterials", TypeBool, Offset(UseExistingMaterials, AssetImportConfig), "Should the importer try and use existing material assets in the game directory if at all possible. (Not currently utilized)");
       addField("IgnoreMaterials", TypeRealString, Offset(IgnoreMaterials, AssetImportConfig), "A list of material names that should not be imported. Separated by either , or ;");
-      addField("PopulateMaterialMaps", TypeBool, Offset(PopulateMaterialMaps, AssetImportConfig), "When processing a material asset, should the importer attempt to populate the various material maps on it by looking up common naming conventions for potentially relevent image files.\n e.g. If MyCoolStuff_Diffuse.png is imported, generating MyCoolStuff material, it would also find MyCoolStuff_Normal and MyCoolStuff_PBR images and map them to the normal and PBRConfig maps respectively automatically");
+      addField("PopulateMaterialMaps", TypeBool, Offset(PopulateMaterialMaps, AssetImportConfig), "When processing a material asset, should the importer attempt to populate the various material maps on it by looking up common naming conventions for potentially relevent image files.\n e.g. If MyCoolStuff_Diffuse.png is imported, generating MyCoolStuff material, it would also find MyCoolStuff_Normal and MyCoolStuff_PBR images and map them to the normal and ORMConfig maps respectively automatically");
    endGroup("Materials");
 
    addGroup("Meshes");
@@ -186,14 +186,14 @@ void AssetImportConfig::initPersistFields()
 
    addGroup("Images");
       addField("importImages", TypeBool, Offset(importImages, AssetImportConfig), "Does this configuration support importing images.");
-      addField("ImageType", TypeRealString, Offset(ImageType, AssetImportConfig), "What is the default ImageType images are imported as. Options are: N/A, Diffuse, Normal, Metalness, Roughness, AO, PBRConfig, GUI, Cubemap");
+      addField("ImageType", TypeRealString, Offset(ImageType, AssetImportConfig), "What is the default ImageType images are imported as. Options are: N/A, Diffuse, Normal, Metalness, Roughness, AO, ORMConfig, GUI, Cubemap");
       addField("DiffuseTypeSuffixes", TypeRealString, Offset(DiffuseTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a diffuse map. \n e.g. _Albedo or _Color");
       addField("NormalTypeSuffixes", TypeRealString, Offset(NormalTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a normal map. \n e.g. _Normal or _Norm");
       addField("MetalnessTypeSuffixes", TypeRealString, Offset(MetalnessTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a metalness map. \n e.g. _Metalness or _Metal");
       addField("RoughnessTypeSuffixes", TypeRealString, Offset(RoughnessTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a roughness map.\n e.g. _roughness or _rough");
       addField("SmoothnessTypeSuffixes", TypeRealString, Offset(SmoothnessTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a smoothness map. \n e.g. _smoothness or _smooth");
       addField("AOTypeSuffixes", TypeRealString, Offset(AOTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a ambient occlusion map. \n e.g. _ambient or _ao");
-      addField("PBRTypeSuffixes", TypeRealString, Offset(PBRTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a PBRConfig map.\n e.g. _Composite or _PBR");
+      addField("PBRTypeSuffixes", TypeRealString, Offset(PBRTypeSuffixes, AssetImportConfig), "What type of suffixes are scanned to detect if an importing image is a ORMConfig map.\n e.g. _Composite or _PBR");
       addField("TextureFilteringMode", TypeRealString, Offset(TextureFilteringMode, AssetImportConfig), "Indicates what filter mode images imported with this configuration utilizes. Options are Linear, Bilinear, Trilinear");
       addField("UseMips", TypeBool, Offset(UseMips, AssetImportConfig), "Indicates if images imported with this configuration utilize mipmaps");
 
@@ -251,7 +251,7 @@ void AssetImportConfig::loadImportConfig(Settings* configSettings, String config
 
    //Materials
    ImportMaterials = dAtob(configSettings->value(String(configName + "/Materials/ImportMaterials").c_str()));
-   CreatePBRConfig = dAtob(configSettings->value(String(configName + "/Materials/CreatePBRConfig").c_str()));
+   CreateORMConfig = dAtob(configSettings->value(String(configName + "/Materials/CreateORMConfig").c_str()));
    UseDiffuseSuffixOnOriginImage = dAtob(configSettings->value(String(configName + "/Materials/UseDiffuseSuffixOnOriginImage").c_str()));
    UseExistingMaterials = dAtob(configSettings->value(String(configName + "/Materials/UseExistingMaterials").c_str()));
    IgnoreMaterials = configSettings->value(String(configName + "/Materials/IgnoreMaterials").c_str());
@@ -334,7 +334,7 @@ void AssetImportConfig::CopyTo(AssetImportConfig* target) const
 
    //Materials
    target->ImportMaterials = ImportMaterials;
-   target->CreatePBRConfig = CreatePBRConfig;
+   target->CreateORMConfig = CreateORMConfig;
    target->UseDiffuseSuffixOnOriginImage = UseDiffuseSuffixOnOriginImage;
    target->UseExistingMaterials = UseExistingMaterials;
    target->IgnoreMaterials = IgnoreMaterials;
@@ -439,7 +439,7 @@ void AssetImportObject::initPersistFields()
 
    addField("tamlFilePath", TypeRealString, Offset(tamlFilePath, AssetImportObject), "What is the ultimate asset taml file path for this import item");
 
-   addField("imageType", TypeRealString, Offset(imageSuffixType, AssetImportObject), "Specific to ImageAsset type. What is the image asset's suffix type. Options are: Albedo, Normal, Roughness, AO, Metalness, PBRConfig");
+   addField("imageType", TypeRealString, Offset(imageSuffixType, AssetImportObject), "Specific to ImageAsset type. What is the image asset's suffix type. Options are: Albedo, Normal, Roughness, AO, Metalness, ORMConfig");
 
    addField("shapeInfo", TYPEID< GuiTreeViewCtrl >(), Offset(shapeInfo, AssetImportObject), "Specific to ShapeAsset type. Processed information about the shape file. Contains numbers and lists of meshes, materials and animations");
 }
@@ -714,7 +714,7 @@ String AssetImporter::parseImageSuffixes(String assetName, String* suffixType)
             break;
          case 5:
             suffixList = activeImportConfig->PBRTypeSuffixes;
-            suffixType->insert(0, "PBRConfig", 10);
+            suffixType->insert(0, "ORMConfig", 10);
             break;
          default:
             suffixList = "";
@@ -1613,7 +1613,10 @@ void AssetImporter::processMaterialAsset(AssetImportObject* assetItem)
 
                   String imageAssetName = childAssetItem->assetName;
 
-                  materialImageNoSuffix = imageAssetName.erase(imageAssetName.length() - suffix.length(), suffix.length());//cache this for later as we may need it for file association lookups
+                  if (suffix.isEmpty())
+                     materialImageNoSuffix = imageAssetName;
+                  else
+                     materialImageNoSuffix = imageAssetName.erase(imageAssetName.length() - suffix.length(), suffix.length());//cache this for later as we may need it for file association lookups
                }
             }
          }
@@ -1622,34 +1625,34 @@ void AssetImporter::processMaterialAsset(AssetImportObject* assetItem)
       //Now that we've checked off any existingly matched image types, process through the unmatched to look for files that associate
       for (S32 t = 0; t < ImageAsset::ImageTypeCount; t++)
       {
+         //This type wasn't found, so try and find a match based on suffix
+         String suffixList;
+
+         switch (t)
+         {
+         case ImageAsset::Albedo:
+            suffixList = activeImportConfig->DiffuseTypeSuffixes;
+            break;
+         case ImageAsset::Normal:
+            suffixList = activeImportConfig->NormalTypeSuffixes;
+            break;
+         case ImageAsset::ORMConfig:
+            suffixList = activeImportConfig->PBRTypeSuffixes;
+            break;
+         case ImageAsset::Metalness:
+            suffixList = activeImportConfig->MetalnessTypeSuffixes;
+            break;
+         case ImageAsset::AO:
+            suffixList = activeImportConfig->AOTypeSuffixes;
+            break;
+         case ImageAsset::Roughness:
+            suffixList = activeImportConfig->RoughnessTypeSuffixes;
+            break;
+            //TODO: Glow map lookup too
+         }
+
          if (!matchedImageTypes[t])
          {
-            //This type wasn't found, so try and find a match based on suffix
-            String suffixList;
-
-            switch (t)
-            {
-            case ImageAsset::Albedo:
-               suffixList = activeImportConfig->DiffuseTypeSuffixes;
-               break;
-            case ImageAsset::Normal:
-               suffixList = activeImportConfig->NormalTypeSuffixes;
-               break;
-            case ImageAsset::PBRConfig:
-               suffixList = activeImportConfig->PBRTypeSuffixes;
-               break;
-            case ImageAsset::Metalness:
-               suffixList = activeImportConfig->MetalnessTypeSuffixes;
-               break;
-            case ImageAsset::AO:
-               suffixList = activeImportConfig->AOTypeSuffixes;
-               break;
-            case ImageAsset::Roughness:
-               suffixList = activeImportConfig->RoughnessTypeSuffixes;
-               break;
-            //TODO: Glow map lookup too
-            }
-
             U32 suffixCount = StringUnit::getUnitCount(suffixList.c_str(), ",;");
             for (U32 i = 0; i < suffixCount; i++)
             {
@@ -1714,6 +1717,18 @@ void AssetImporter::processMaterialAsset(AssetImportObject* assetItem)
 
                   matchedImageTypes[t] = newImageAssetObj;
                }
+            }
+         }
+         else
+         {
+            //just a bit of cleanup and logical testing for matches
+            //in the event we KNOW what the type is, but we don't have a suffix, such as a found image on a material lookup
+            //that doesn't have a suffix, we assume it to be the albedo, so we'll just append the suffix to avoid collisions if
+            //the name already matches our material name, similar to above logic
+            if (matchedImageTypes[t]->assetName == assetItem->assetName)
+            {
+               matchedImageTypes[t]->assetName += StringUnit::getUnit(suffixList.c_str(), 0, ",;");
+               matchedImageTypes[t]->cleanAssetName = matchedImageTypes[t]->assetName;
             }
          }
       }
@@ -1903,6 +1918,11 @@ void AssetImporter::processShapeMaterialInfo(AssetImportObject* assetItem, S32 m
          if (suffix.isNotEmpty())
          {
             imageAssetItem->imageSuffixType = suffixType;
+         }
+         else
+         {
+            //we'll assume it's albedo
+            imageAssetItem->imageSuffixType = "Albedo";
          }
       }
       else
@@ -2558,7 +2578,7 @@ Torque::Path AssetImporter::importImageAsset(AssetImportObject* assetItem)
 
    //If it's not a re-import, check that the file isn't being in-place imported. If it isn't, store off the original
    //file path for reimporting support later
-   if (!isReimport && dStrcmp(qualifiedFromFile, qualifiedToFile))
+   if (!isReimport && String::compare(qualifiedFromFile, qualifiedToFile))
    {
       newAsset->setDataField(StringTable->insert("originalFilePath"), nullptr, qualifiedFromFile);
    }
@@ -2578,7 +2598,7 @@ Torque::Path AssetImporter::importImageAsset(AssetImportObject* assetItem)
 
    if (!isReimport)
    {
-      bool isInPlace = !dStrcmp(qualifiedFromFile, qualifiedToFile);
+      bool isInPlace = !String::compare(qualifiedFromFile, qualifiedToFile);
 
       if (!isInPlace && !dPathCopy(qualifiedFromFile, qualifiedToFile, !isReimport))
       {
@@ -2644,10 +2664,10 @@ Torque::Path AssetImporter::importMaterialAsset(AssetImportObject* assetItem)
       return "";
    }
 
-   //build the PBRConfig file if we're flagged to and have valid image maps
-   if (activeImportConfig->CreatePBRConfig)
+   //build the ORMConfig file if we're flagged to and have valid image maps
+   if (activeImportConfig->CreateORMConfig)
    {
-      AssetImportObject* pbrConfigMap = nullptr;
+      AssetImportObject* ormMap = nullptr;
       AssetImportObject* roughnessMap = nullptr;
       AssetImportObject* metalnessMap = nullptr;
       AssetImportObject* aoMap = nullptr;
@@ -2660,8 +2680,8 @@ Torque::Path AssetImporter::importMaterialAsset(AssetImportObject* assetItem)
          if (childItem->skip || childItem->assetType.compare("ImageAsset") != 0)
             continue;
 
-         if (childItem->imageSuffixType.compare("PBRConfig") == 0)
-            pbrConfigMap = childItem;
+         if (childItem->imageSuffixType.compare("ORMConfig") == 0)
+            ormMap = childItem;
          else if(childItem->imageSuffixType.compare("Roughness") == 0)
             roughnessMap = childItem;
          else if (childItem->imageSuffixType.compare("Metalness") == 0)
@@ -2670,14 +2690,14 @@ Torque::Path AssetImporter::importMaterialAsset(AssetImportObject* assetItem)
             aoMap = childItem;
       }
 
-      if (pbrConfigMap != nullptr && pbrConfigMap->generatedAsset)
+      if (ormMap != nullptr && ormMap->generatedAsset)
       {
          if (roughnessMap != nullptr || metalnessMap != nullptr || aoMap != nullptr)
          {
             U32 channelKey[4] = { 0,1,2,3 };
 
             GFX->getTextureManager()->saveCompositeTexture(aoMap->filePath.getFullPath(), roughnessMap->filePath.getFullPath(), metalnessMap->filePath.getFullPath(), "",
-               channelKey, pbrConfigMap->filePath.getFullPath(), &GFXTexturePersistentProfile);
+               channelKey, ormMap->filePath.getFullPath(), &GFXTexturePersistentProfile);
          }
       }
    }
@@ -2722,9 +2742,9 @@ Torque::Path AssetImporter::importMaterialAsset(AssetImportObject* assetItem)
          {
             mapFieldName = "NormalMap";
          }
-         else if (imageType == ImageAsset::ImageTypes::PBRConfig)
+         else if (imageType == ImageAsset::ImageTypes::ORMConfig)
          {
-            mapFieldName = "PBRConfig";
+            mapFieldName = "ORMConfig";
          }
          else if (imageType == ImageAsset::ImageTypes::Metalness)
          {
@@ -2784,9 +2804,9 @@ Torque::Path AssetImporter::importMaterialAsset(AssetImportObject* assetItem)
          {
             mapFieldName = "NormalMap";
          }
-         else if (imageType == ImageAsset::ImageTypes::PBRConfig)
+         else if (imageType == ImageAsset::ImageTypes::ORMConfig)
          {
-            mapFieldName = "PBRConfigMap";
+            mapFieldName = "ORMConfigMap";
          }
          else if (imageType == ImageAsset::ImageTypes::Metalness)
          {
@@ -2877,7 +2897,7 @@ Torque::Path AssetImporter::importShapeAsset(AssetImportObject* assetItem)
 
    //If it's not a re-import, check that the file isn't being in-place imported. If it isn't, store off the original
    //file path for reimporting support later
-   if (!isReimport && dStrcmp(qualifiedFromFile, qualifiedToFile))
+   if (!isReimport && String::compare(qualifiedFromFile, qualifiedToFile))
    {
       newAsset->setDataField(StringTable->insert("originalFilePath"), nullptr, qualifiedFromFile);
    }
@@ -2930,7 +2950,7 @@ Torque::Path AssetImporter::importShapeAsset(AssetImportObject* assetItem)
    bool makeNewConstructor = true;
    if (!isReimport)
    {
-      bool isInPlace = !dStrcmp(qualifiedFromFile, qualifiedToFile);
+      bool isInPlace = !String::compare(qualifiedFromFile, qualifiedToFile);
 
       if (!isInPlace && !dPathCopy(qualifiedFromFile, qualifiedToFile, !isReimport))
       {
@@ -3109,7 +3129,7 @@ Torque::Path AssetImporter::importSoundAsset(AssetImportObject* assetItem)
 
    //If it's not a re-import, check that the file isn't being in-place imported. If it isn't, store off the original
    //file path for reimporting support later
-   if (!isReimport && dStrcmp(qualifiedFromFile, qualifiedToFile))
+   if (!isReimport && String::compare(qualifiedFromFile, qualifiedToFile))
    {
       newAsset->setDataField(StringTable->insert("originalFilePath"), nullptr, qualifiedFromFile);
    }
@@ -3126,7 +3146,7 @@ Torque::Path AssetImporter::importSoundAsset(AssetImportObject* assetItem)
 
    if (!isReimport)
    {
-      bool isInPlace = !dStrcmp(qualifiedFromFile, qualifiedToFile);
+      bool isInPlace = !String::compare(qualifiedFromFile, qualifiedToFile);
 
       if (!isInPlace && !dPathCopy(qualifiedFromFile, qualifiedToFile, !isReimport))
       {
@@ -3165,7 +3185,7 @@ Torque::Path AssetImporter::importShapeAnimationAsset(AssetImportObject* assetIt
 
    //If it's not a re-import, check that the file isn't being in-place imported. If it isn't, store off the original
    //file path for reimporting support later
-   if (!isReimport && dStrcmp(qualifiedFromFile, qualifiedToFile))
+   if (!isReimport && String::compare(qualifiedFromFile, qualifiedToFile))
    {
       newAsset->setDataField(StringTable->insert("originalFilePath"), nullptr, qualifiedFromFile);
    }
@@ -3182,7 +3202,7 @@ Torque::Path AssetImporter::importShapeAnimationAsset(AssetImportObject* assetIt
 
    if (!isReimport)
    {
-      bool isInPlace = !dStrcmp(qualifiedFromFile, qualifiedToFile);
+      bool isInPlace = !String::compare(qualifiedFromFile, qualifiedToFile);
 
       if (!isInPlace && !dPathCopy(qualifiedFromFile, qualifiedToFile, !isReimport))
       {

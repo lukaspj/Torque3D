@@ -45,6 +45,8 @@
 #include "gfx/bitmap/gBitmap.h"
 #include "gfx/gfxTextureHandle.h"
 
+#include "gui/editor/guiInspectorTypes.h"
+
 //-----------------------------------------------------------------------------
 class ImageAsset : public AssetBase
 {
@@ -56,7 +58,7 @@ public:
    {
       Albedo = 0,
       Normal = 1,
-      PBRConfig = 2,
+      ORMConfig = 2,
       GUI = 3,
       Roughness = 4,
       AO = 5,
@@ -109,38 +111,109 @@ public:
 
    void setImageType(ImageTypes type) { mImageType = type; }
 
-   bool getAssetByFilename(StringTableEntry fileName, AssetPtr<ImageAsset>* imageAsset);
-   StringTableEntry getAssetIdByFilename(StringTableEntry fileName);
+   static bool getAssetByFilename(StringTableEntry fileName, AssetPtr<ImageAsset>* imageAsset);
+   static StringTableEntry getAssetIdByFilename(StringTableEntry fileName);
+   static bool getAssetById(StringTableEntry assetId, AssetPtr<ImageAsset>* imageAsset);
 
 protected:
    virtual void            initializeAsset(void);
    virtual void            onAssetRefresh(void);
 
-   static bool setImageFileName(void *obj, const char *index, const char *data) { static_cast<ImageAsset*>(obj)->setImageFileName(data); return false; }
+   static bool setImageFileName(void* obj, const char* index, const char* data) { static_cast<ImageAsset*>(obj)->setImageFileName(data); return false; }
    static const char* getImageFileName(void* obj, const char* data) { return static_cast<ImageAsset*>(obj)->getImageFileName(); }
 
    void loadImage();
 };
 
 DefineConsoleType(TypeImageAssetPtr, ImageAsset)
+DefineConsoleType(TypeImageAssetId, String)
 
 typedef ImageAsset::ImageTypes ImageAssetType;
 DefineEnumType(ImageAssetType);
 
+class GuiInspectorTypeImageAssetPtr : public GuiInspectorTypeFileName
+{
+   typedef GuiInspectorTypeFileName Parent;
+public:
+
+   GuiBitmapButtonCtrl* mImageEdButton;
+
+   DECLARE_CONOBJECT(GuiInspectorTypeImageAssetPtr);
+   static void consoleInit();
+
+   virtual GuiControl* constructEditControl();
+   virtual bool updateRects();
+};
+
+class GuiInspectorTypeImageAssetId : public GuiInspectorTypeImageAssetPtr
+{
+   typedef GuiInspectorTypeImageAssetPtr Parent;
+public:
+
+   DECLARE_CONOBJECT(GuiInspectorTypeImageAssetId);
+   static void consoleInit();
+};
+
 #define assetText(x,suff) std::string(std::string(#x) + std::string(#suff)).c_str()
-#define scriptBindMapSlot(name, consoleClass) addField(#name, TypeImageFilename, Offset(m##name##Filename, consoleClass), assetText(name,texture map.)); \
-                                      addField(assetText(name,Asset), TypeImageAssetPtr, Offset(m##name##AssetId, consoleClass), assetText(name,asset reference.));
 
-#define scriptBindMapArraySlot(name, arraySize, consoleClass) addField(#name, TypeImageFilename, Offset(m##name##Filename, consoleClass), arraySize, assetText(name,texture map.)); \
-                                      addField(assetText(name,Asset), TypeImageAssetPtr, Offset(m##name##AssetId, consoleClass), arraySize, assetText(name,asset reference.));
+#define initMapSlot(name) m##name##Filename = String::EmptyString; m##name##AssetId = StringTable->EmptyString(); m##name##Asset = NULL;
+#define bindMapSlot(name) if (m##name##AssetId != String::EmptyString) m##name##Asset = m##name##AssetId;
 
-#define DECLARE_TEXTUREMAP(name) FileName m##name##Filename;\
+#define scriptBindMapSlot(name, consoleClass, docs) addField(#name, TypeImageFilename, Offset(m##name##Filename, consoleClass), assetText(name, docs)); \
+                                      addProtectedField(assetText(name, Asset), TypeImageAssetId, Offset(m##name##AssetId, consoleClass), consoleClass::_set##name##Asset, & defaultProtectedGetFn, assetText(name, asset reference.));
+
+#define initMapArraySlot(name,id) m##name##Filename[id] = String::EmptyString; m##name##AssetId[id] = StringTable->EmptyString(); m##name##Asset[id] = NULL;
+#define bindMapArraySlot(name,id) if (m##name##AssetId[id] != String::EmptyString) m##name##Asset[id] = m##name##AssetId[id];
+#define scriptBindMapArraySlot(name, arraySize, consoleClass, docs) addField(#name, TypeImageFilename, Offset(m##name##Filename, consoleClass), arraySize, assetText(name, docs)); \
+                                      addProtectedField(assetText(name,Asset), TypeImageAssetId, Offset(m##name##AssetId, consoleClass), consoleClass::_set##name##AssetSlot, &defaultProtectedGetFn, arraySize, assetText(name,asset reference.));
+
+#define DECLARE_TEXTUREMAP(className,name)      protected: \
+                                      FileName m##name##Filename;\
                                       StringTableEntry m##name##AssetId;\
-                                      AssetPtr<ImageAsset>  m##name##Asset;
+                                      AssetPtr<ImageAsset>  m##name##Asset;\
+                                      public: \
+                                      const String& get##name() const { return m##name##Filename; }\
+                                      void set##name(FileName _in) { m##name##Filename = _in; }\
+                                      const AssetPtr<ImageAsset> & get##name##Asset() const { return m##name##Asset; }\
+                                      void set##name##Asset(AssetPtr<ImageAsset>_in) { m##name##Asset = _in; }\
+static bool _set##name##Asset(void* obj, const char* index, const char* data)\
+{\
+    className* mat = static_cast<className*>(obj);\
+   mat->m##name##AssetId = StringTable->insert(data);\
+   if (ImageAsset::getAssetById(mat->m##name##AssetId, &mat->m##name##Asset))\
+   {\
+      if (mat->m##name##Asset.getAssetId() != StringTable->insert("Core_Rendering:noMaterial"))\
+         mat->m##name##Filename = StringTable->EmptyString();\
+      return true;\
+   }\
+   return true;\
+}
 
-#define DECLARE_TEXTUREARRAY(name,max) FileName m##name##Filename[max];\
+#define GET_TEXTUREMAP(name)          get##name()
+#define SET_TEXTUREMAP(name,_in)      set##name(_in)
+#define GET_TEXTUREASSET(name)        get##name##Asset()
+#define SET_TEXTUREASSET(name,_in)    set##name##Asset(_in)
+
+#define DECLARE_TEXTUREARRAY(className,name,max) FileName m##name##Filename[max];\
                                       StringTableEntry m##name##AssetId[max];\
-                                      AssetPtr<ImageAsset>  m##name##Asset[max];
-
+                                      AssetPtr<ImageAsset>  m##name##Asset[max];\
+static bool _set##name##AssetSlot(void* obj, const char* index, const char* data)\
+{\
+   className* mat = static_cast<className*>(obj);\
+   if (!index) return false;\
+   U32 idx = dAtoi(index);\
+   if (idx >= max)\
+      return false;\
+   mat->m##name##AssetId[idx] = StringTable->insert(data);\
+   if (ImageAsset::getAssetById(mat->m##name##AssetId[idx], &mat->m##name##Asset[idx]))\
+   {\
+      if (mat->m##name##Asset[idx].getAssetId() != StringTable->insert("Core_Rendering:noMaterial"))\
+      {\
+         mat->m##name##Filename[idx] = StringTable->EmptyString();\
+      }\
+      return true;\
+   }\
+   return true;\
+}
 #endif
 

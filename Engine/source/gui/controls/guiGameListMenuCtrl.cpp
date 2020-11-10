@@ -391,7 +391,7 @@ void GuiGameListMenuCtrl::onRenderKeybindOption(Row* row, Point2I currentOffset)
    //drawer->drawBitmap(row->mBitmap, )
 
    Point2I button;
-   button.x = currentOffset.x + columnSplit + (columnSplit / 2)/* + (optionWidth / 2)*/;
+   button.x = currentOffset.x + columnSplit + (columnSplit / 2.5)/* + (optionWidth / 2)*/;
    button.y = currentOffset.y + (rowHeight / 4);
 
    Point2I buttonSize;
@@ -500,7 +500,7 @@ void GuiGameListMenuCtrl::addRow(const char* label, const char* optionsList, boo
       const char* option = StringUnit::getUnit(optionsList, i, DELIM);
       options.push_back(StringTable->insert(option, true));
 
-      if (dStrcmp(option, defaultValue) == 0)
+      if (String::compare(option, defaultValue) == 0)
          defaultOption = options.size() - 1;
    }
    row->mOptions = options;
@@ -885,6 +885,14 @@ bool GuiGameListMenuCtrl::onKeyDown(const GuiEvent &event)
          changeRow(1);
          return true;
 
+      case KEY_LEFT:
+         changeOption(-1);
+         return true;
+
+      case KEY_RIGHT:
+         changeOption(1);
+         return true;
+
       case KEY_A:
       case KEY_RETURN:
       case KEY_NUMPADENTER:
@@ -1073,7 +1081,7 @@ bool GuiGameListMenuCtrl::selectOption(S32 rowIndex, const char* theOption)
 
    for (Vector<StringTableEntry>::iterator anOption = row->mOptions.begin(); anOption < row->mOptions.end(); ++anOption)
    {
-      if (dStrcmp(*anOption, theOption) == 0)
+      if (String::compare(*anOption, theOption) == 0)
       {
          S32 newIndex = anOption - row->mOptions.begin();
          row->mSelectedOption = newIndex;

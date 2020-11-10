@@ -85,16 +85,15 @@ struct ShaderGenVars
    const static String vectorLightColor;
    const static String vectorLightBrightness;
 
-   const static String pbrConfig;
-   const static String smoothness;
+   const static String ormConfig;
+   const static String roughness;
    const static String metalness;
    const static String glowMul;
 
    //Reflection Probes
    const static String probePosition;
    const static String probeRefPos;
-   const static String refBoxMin;
-   const static String refBoxMax;
+   const static String refScale;
    const static String worldToObjArray;
    const static String probeConfigData;
    const static String specularCubemapAR;

@@ -112,7 +112,7 @@ function SimSet::registerDatablock(%scopeSet, %datablockFilePath, %isExclusive)
    {
         %check = DatablockFilesList.getKey(%i);
         //look for a substring match
-        %isMatch = strIsMatchExpr("*"@ %datablockFilePath,%check );
+        %isMatch = strIsMatchExpr("*"@ strReplace(%datablockFilePath,"./","/"),%check );
         if (%isMatch)
         {
             //check if we're already locked in
@@ -205,7 +205,7 @@ function SimSet::queueExec(%scopeSet, %execFilePath, %isExclusive)
    if ($traceModuleCalls)
       warn("module root path="@ makeRelativePath(%moduleDef.ModulePath));
   
-   %fullPath = makeRelativePath(%moduleDef.ModulePath) @ %execFilePath;
+   %fullPath = pathConcat(%moduleDef.ModulePath, %execFilePath);
    ///go through all entries
    %locked = false;
    %execFilecount = ExecFilesList.count();
@@ -213,7 +213,7 @@ function SimSet::queueExec(%scopeSet, %execFilePath, %isExclusive)
    {
         %check = ExecFilesList.getKey(%i);
         //look for a substring match
-        %isMatch = strIsMatchExpr("*"@ %execFilePath,%check );
+        %isMatch = strIsMatchExpr("*"@ strReplace(%execFilePath,"./","/"),%check );
         if (%isMatch)
         {
             //check if we're already locked in
