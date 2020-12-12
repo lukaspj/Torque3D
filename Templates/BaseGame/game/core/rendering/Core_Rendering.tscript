@@ -1,0 +1,55 @@
+
+function Core_Rendering::onCreate(%this)
+{
+   $Core::MissingTexturePath = "core/rendering/images/missingTexture";
+   $Core::UnAvailableTexturePath = "core/rendering/images/unavailable";
+   $Core::WarningTexturePath = "core/rendering/images/warnMat";
+   $Core::CommonShaderPath = "core/rendering/shaders";
+   $Core::DefaultIrradianceCubemap = "core/rendering/images/default_irradiance.dds";
+   $Core::DefaultPrefilterCubemap = "core/rendering/images/default_prefilter.dds";
+   $Core::BRDFTexture = "core/rendering/images/brdfTexture.dds";
+   
+   $pref::ReflectionProbes::BakeResolution = ProjectSettings.value("Rendering/ProbeCaptureResolution", "64");
+   
+   exec("./scripts/graphicsOptions.tscript");
+   exec("./scripts/renderManager.tscript");
+   exec("./scripts/gfxData/clouds.tscript");
+   exec("./scripts/gfxData/commonMaterialData.tscript");
+   exec("./scripts/gfxData/scatterSky.tscript");
+   exec("./scripts/gfxData/shaders.tscript");
+   exec("./scripts/gfxData/terrainBlock.tscript");
+   exec("./scripts/gfxData/water.tscript");
+   exec("./scripts/gfxData/warningTerrainMat.tscript");
+}
+
+function Core_Rendering::onDestroy(%this)
+{
+}
+
+function Core_Rendering::initClient(%this)
+{
+   // Start rendering and stuff.
+   initRenderManager();
+   initLightingSystems("Advanced Lighting"); 
+
+   //load prefs
+   exec("data/defaults.tscript");
+   %prefPath = getPrefpath();
+   if ( isFile( %prefPath @ "/clientPrefs.tscript" ) )
+      exec( %prefPath @ "/clientPrefs.tscript" );
+   
+   configureCanvas();
+   
+   //Autodetect settings if it's our first time
+   if($pref::Video::autoDetect)
+      AutodetectGraphics();
+
+   postFXInit();
+   
+   closeSplashWindow();
+   
+   // As we know at this point that the initial load is complete,
+   // we can hide any splash screen we have, and show the canvas.
+   // This keeps things looking nice, instead of having a blank window
+   Canvas.showWindow();
+}
