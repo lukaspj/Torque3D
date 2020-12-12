@@ -224,6 +224,9 @@ if(WIN32)
 	endif()
 endif()
 
+option(USE_SOLUTION_FOLDERS "use solution folders to group projects" OFF)
+set_property(GLOBAL PROPERTY USE_FOLDERS ${USE_SOLUTION_FOLDERS})
+
 # build types
 if(NOT MSVC AND NOT APPLE) # handle single-configuration generator
 	set(CMAKE_BUILD_TYPE ${TORQUE_BUILD_TYPE})
@@ -613,7 +616,15 @@ endif()
 
 ###############################################################################
 ###############################################################################
-finishExecutable()
+if(${TORQUE_LIBRARY})
+	set(TORQUE_STATIC_TMP ${TORQUE_STATIC})
+	set(TORQUE_STATIC OFF)
+	set(TORQUE_CXX_FLAGS_${TORQUE_APP_NAME} "${TORQUE_CXX_FLAGS_EXECUTABLES}")
+	finishLibrary()
+	set(TORQUE_STATIC ${TORQUE_STATIC_TMP})
+else()
+	finishExecutable()
+endif()
 ###############################################################################
 ###############################################################################
 
@@ -647,8 +658,10 @@ endif()
 if(NOT EXISTS "${projectOutDir}/${PROJECT_NAME}.torsion")
     CONFIGURE_FILE("${cmakeDir}/template.torsion.in" "${projectOutDir}/${PROJECT_NAME}.torsion")
 endif()
-if(EXISTS "${CMAKE_SOURCE_DIR}/Templates/${TORQUE_TEMPLATE}/game/main.cs.in")
-    CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/Templates/${TORQUE_TEMPLATE}/game/main.cs.in" "${projectOutDir}/main.cs")
+if(NOT ${TORQUE_NO_MAIN_CS})
+	if(EXISTS "${CMAKE_SOURCE_DIR}/Templates/${TORQUE_TEMPLATE}/game/main.cs.in")
+		CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/Templates/${TORQUE_TEMPLATE}/game/main.cs.in" "${projectOutDir}/main.cs")
+	endif()
 endif()
 if(WIN32)
     if(NOT EXISTS "${projectSrcDir}/torque.rc")
